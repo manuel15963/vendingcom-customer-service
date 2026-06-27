@@ -1,0 +1,30 @@
+# ============================================================
+# PLANTILLA del perfil LOCAL (este archivo SÍ se sube al repo).
+#
+# Para usarlo en tu máquina:
+#   1) cp application-local.yml.example application-local.yml
+#   2) en application-local.yml pon tu contraseña real de Postgres
+#
+# 'application-local.yml' está en .gitignore -> tus credenciales
+# NUNCA suben al repositorio.
+# ============================================================
+
+spring:
+  r2dbc:
+    url: r2dbc:postgresql://localhost:5432/postgres
+    username: postgres
+    password: TU_PASSWORD_LOCAL   # <-- reemplaza por tu contraseña local
+
+# Secret de DESARROLLO (no es el de producción; ese va por variable en Render).
+# Para probar contra el auth DESPLEGADO, exporta JWT_SECRET con el mismo
+# valor que tenga el auth-service en Render y este default queda ignorado.
+jwt:
+  secret: ${JWT_SECRET:CAMBIA_ESTE_SECRET_DE_DESARROLLO}
+
+cors:
+  allowed-origins: http://localhost:4200,http://localhost:8100,http://127.0.0.1:8100
+
+logging:
+  level:
+    org.springframework.r2dbc: DEBUG
+    com.vendingcom.customer_service: DEBUG
