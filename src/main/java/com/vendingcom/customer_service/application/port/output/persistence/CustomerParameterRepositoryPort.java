@@ -15,6 +15,9 @@ public interface CustomerParameterRepositoryPort {
     /** Verifica que un parámetro exista y pertenezca al grupo indicado (ej: que el id sea un CUSTOMER_TYPE). */
     Mono<Boolean> existsByIdAndGroup(Integer parameterId, String parameterGroup);
 
+    /** Devuelve el código de un parámetro por su id (ej: 3 -> "EMPRESA"). Vacío si no existe. */
+    Mono<String> findCodeById(Integer parameterId);
+
     /** Lista los parámetros activos de un grupo, ordenados por sort_order. */
     Flux<CustomerParameter> findActiveByGroup(String parameterGroup);
 

@@ -47,6 +47,14 @@ public class CustomerParameterPersistenceAdapter implements CustomerParameterRep
     }
 
     @Override
+    public Mono<String> findCodeById(Integer parameterId) {
+        return databaseClient.sql("SELECT parameter_code FROM customer_parameters WHERE parameter_id = :id")
+                .bind("id", parameterId)
+                .map((row, metadata) -> row.get("parameter_code", String.class))
+                .one();
+    }
+
+    @Override
     public Flux<CustomerParameter> findActiveByGroup(String parameterGroup) {
         return databaseClient.sql("""
                         SELECT parameter_id, parameter_group, parameter_code, parameter_value,

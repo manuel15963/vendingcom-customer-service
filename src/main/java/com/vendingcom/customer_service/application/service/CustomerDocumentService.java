@@ -23,6 +23,7 @@ import reactor.core.publisher.Mono;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
+import java.util.Set;
 
 @Service
 public class CustomerDocumentService implements CustomerDocumentUseCase {
@@ -32,6 +33,11 @@ public class CustomerDocumentService implements CustomerDocumentUseCase {
     private static final String STATUS_ACTIVE = "ACTIVE";
     private static final String STATUS_INACTIVE = "INACTIVE";
     private static final String TABLE_DOCUMENTS = "customer_documents";
+
+    // Reglas: una PERSONA usa DNI/CE/Pasaporte; una EMPRESA/INSTITUCIÓN usa RUC.
+    private static final String CUSTOMER_TYPE_PERSONA = "PERSONA";
+    private static final String DOC_RUC = "RUC";
+    private static final Set<String> PERSONAL_DOC_CODES = Set.of("DNI", "CE", "PASAPORTE");
 
     private final CustomerDocumentRepositoryPort documentRepositoryPort;
     private final CustomerRepositoryPort customerRepositoryPort;
@@ -56,6 +62,7 @@ public class CustomerDocumentService implements CustomerDocumentUseCase {
         String documentNumber = normalize(request.documentNumber());
         return ensureCustomerExists(customerId)
                 .then(validateDocumentType(request.documentTypeId()))
+                .then(validateDocumentMatchesCustomer(customerId, request.documentTypeId()))
                 .then(checkDuplicate(request.documentTypeId(), documentNumber, null))
                 .then(resolveStatusId(STATUS_ACTIVE))
                 .flatMap(statusId -> currentActorId().flatMap(actor -> {
@@ -104,6 +111,7 @@ public class CustomerDocumentService implements CustomerDocumentUseCase {
         String documentNumber = normalize(request.documentNumber());
         return findDocumentOfCustomer(customerId, documentId)
                 .flatMap(existing -> validateDocumentType(request.documentTypeId())
+                        .then(validateDocumentMatchesCustomer(customerId, request.documentTypeId()))
                         .then(checkDuplicate(request.documentTypeId(), documentNumber, documentId))
                         .then(currentActorId())
                         .flatMap(actor -> {
@@ -200,6 +208,30 @@ public class CustomerDocumentService implements CustomerDocumentUseCase {
                         ? Mono.empty()
                         : Mono.error(new BusinessRuleException(
                         "INVALID_DOCUMENT_TYPE", "El tipo de documento indicado no es válido.")));
+    }
+
+    /**
+     * El tipo de documento debe corresponder al tipo de cliente:
+     * PERSONA -> DNI / CE / Pasaporte; EMPRESA o INSTITUCIÓN -> RUC.
+     */
+    private Mono<Void> validateDocumentMatchesCustomer(Integer customerId, Integer documentTypeId) {
+        return customerRepositoryPort.findById(customerId)
+                .flatMap(customer -> Mono.zip(
+                        parameterRepositoryPort.findCodeById(customer.customerTypeId()),
+                        parameterRepositoryPort.findCodeById(documentTypeId)))
+                .flatMap(codes -> {
+                    boolean isPerson = CUSTOMER_TYPE_PERSONA.equals(codes.getT1());
+                    String docCode = codes.getT2();
+                    if (isPerson && !PERSONAL_DOC_CODES.contains(docCode)) {
+                        return Mono.<Void>error(new BusinessRuleException("DOCUMENT_TYPE_MISMATCH",
+                                "Un cliente tipo PERSONA solo admite DNI, Carnet de Extranjería o Pasaporte."));
+                    }
+                    if (!isPerson && !DOC_RUC.equals(docCode)) {
+                        return Mono.<Void>error(new BusinessRuleException("DOCUMENT_TYPE_MISMATCH",
+                                "Un cliente tipo EMPRESA o INSTITUCIÓN solo admite RUC."));
+                    }
+                    return Mono.<Void>empty();
+                });
     }
 
     private Mono<Void> checkDuplicate(Integer documentTypeId, String documentNumber, Integer excludeDocumentId) {
