@@ -5,6 +5,7 @@ import com.vendingcom.customer_service.application.port.output.persistence.Custo
 import com.vendingcom.customer_service.application.port.output.persistence.CustomerDocumentRepositoryPort;
 import com.vendingcom.customer_service.application.port.output.persistence.CustomerParameterRepositoryPort;
 import com.vendingcom.customer_service.application.port.output.persistence.CustomerRepositoryPort;
+import com.vendingcom.customer_service.domain.exception.BusinessRuleException;
 import com.vendingcom.customer_service.domain.exception.DuplicateResourceException;
 import com.vendingcom.customer_service.domain.model.Customer;
 import com.vendingcom.customer_service.domain.model.CustomerDocument;
@@ -49,6 +50,8 @@ class CustomerDocumentServiceTest {
     void create_documentoDuplicado_lanzaDuplicate() {
         when(customerPort.findById(1)).thenReturn(Mono.just(customer()));
         when(parameterPort.existsByIdAndGroup(13, "DOCUMENT_TYPE")).thenReturn(Mono.just(true));
+        when(parameterPort.findCodeById(3)).thenReturn(Mono.just("EMPRESA"));
+        when(parameterPort.findCodeById(13)).thenReturn(Mono.just("RUC"));
         when(parameterPort.findIdByGroupAndCode("DOCUMENT_STATUS", "ACTIVE")).thenReturn(Mono.just(7)); // eager
         when(documentPort.findByTypeAndNumber(13, "20999")).thenReturn(Mono.just(doc(5)));
 
@@ -61,6 +64,8 @@ class CustomerDocumentServiceTest {
     void create_ok_sinDuplicado() {
         when(customerPort.findById(1)).thenReturn(Mono.just(customer()));
         when(parameterPort.existsByIdAndGroup(13, "DOCUMENT_TYPE")).thenReturn(Mono.just(true));
+        when(parameterPort.findCodeById(3)).thenReturn(Mono.just("EMPRESA"));
+        when(parameterPort.findCodeById(13)).thenReturn(Mono.just("RUC"));
         when(parameterPort.findIdByGroupAndCode("DOCUMENT_STATUS", "ACTIVE")).thenReturn(Mono.just(7));
         when(documentPort.findByTypeAndNumber(13, "20999")).thenReturn(Mono.empty());
         when(documentPort.clearPrimaryFlag(1)).thenReturn(Mono.empty());
@@ -72,5 +77,21 @@ class CustomerDocumentServiceTest {
         StepVerifier.create(service.create(1, request()))
                 .expectNextMatches(d -> d.documentId().equals(10) && "ACTIVO".equals(d.documentStatusName()))
                 .verifyComplete();
+    }
+
+    @Test
+    void create_empresaConDni_lanzaMismatch() {
+        // Cliente EMPRESA (tipo 3) intentando registrar un DNI (tipo 14) -> debe rechazar.
+        when(customerPort.findById(1)).thenReturn(Mono.just(customer()));
+        when(parameterPort.existsByIdAndGroup(14, "DOCUMENT_TYPE")).thenReturn(Mono.just(true));
+        when(parameterPort.findCodeById(3)).thenReturn(Mono.just("EMPRESA"));
+        when(parameterPort.findCodeById(14)).thenReturn(Mono.just("DNI"));
+        when(documentPort.findByTypeAndNumber(14, "12345678")).thenReturn(Mono.empty()); // eager
+        when(parameterPort.findIdByGroupAndCode("DOCUMENT_STATUS", "ACTIVE")).thenReturn(Mono.just(7)); // eager
+
+        CreateDocumentRequest dniReq = new CreateDocumentRequest(14, "12345678", null, true);
+        StepVerifier.create(service.create(1, dniReq))
+                .expectError(BusinessRuleException.class)
+                .verify();
     }
 }
