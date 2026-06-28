@@ -51,7 +51,7 @@ public class CustomerContactService implements CustomerContactUseCase {
     @Override
     @Transactional
     public Mono<CustomerContact> create(Integer customerId, CreateContactRequest request) {
-        return ensureCustomerExists(customerId)
+        return ensureCustomerActive(customerId)
                 .then(resolveStatusId(STATUS_ACTIVE))
                 .flatMap(statusId -> currentActorId().flatMap(actor -> {
                     boolean primary = Boolean.TRUE.equals(request.isPrimary());
@@ -176,6 +176,16 @@ public class CustomerContactService implements CustomerContactUseCase {
         return customerRepositoryPort.findById(customerId)
                 .switchIfEmpty(Mono.error(new ResourceNotFoundException("No se encontró el cliente con id: " + customerId)))
                 .then();
+    }
+
+    /** Para agregar registros el cliente debe existir Y estar activo. */
+    private Mono<Void> ensureCustomerActive(Integer customerId) {
+        return customerRepositoryPort.findById(customerId)
+                .switchIfEmpty(Mono.error(new ResourceNotFoundException("No se encontró el cliente con id: " + customerId)))
+                .flatMap(customer -> "ACTIVO".equals(customer.customerStatusName())
+                        ? Mono.<Void>empty()
+                        : Mono.<Void>error(new BusinessRuleException(
+                        "CUSTOMER_INACTIVE", "No se pueden agregar registros a un cliente inactivo.")));
     }
 
     private Mono<CustomerContact> findContactOfCustomer(Integer customerId, Integer contactId) {

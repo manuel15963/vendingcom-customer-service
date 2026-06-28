@@ -14,6 +14,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
@@ -38,12 +39,12 @@ class CustomerDocumentServiceTest {
     }
 
     private CustomerDocument doc(Integer id) {
-        return new CustomerDocument(id, 1, 13, "20999", null, true, 7, 1, null,
+        return new CustomerDocument(id, 1, 13, "20131312955", null, true, 7, 1, null,
                 LocalDateTime.now(), null, "RUC", "ACTIVO");
     }
 
     private CreateDocumentRequest request() {
-        return new CreateDocumentRequest(13, "20999", null, true);
+        return new CreateDocumentRequest(13, "20131312955", null, true);
     }
 
     @Test
@@ -53,7 +54,8 @@ class CustomerDocumentServiceTest {
         when(parameterPort.findCodeById(3)).thenReturn(Mono.just("EMPRESA"));
         when(parameterPort.findCodeById(13)).thenReturn(Mono.just("RUC"));
         when(parameterPort.findIdByGroupAndCode("DOCUMENT_STATUS", "ACTIVE")).thenReturn(Mono.just(7)); // eager
-        when(documentPort.findByTypeAndNumber(13, "20999")).thenReturn(Mono.just(doc(5)));
+        when(documentPort.findByCustomerId(1)).thenReturn(Flux.empty());
+        when(documentPort.findByTypeAndNumber(13, "20131312955")).thenReturn(Mono.just(doc(5)));
 
         StepVerifier.create(service.create(1, request()))
                 .expectError(DuplicateResourceException.class)
@@ -67,7 +69,8 @@ class CustomerDocumentServiceTest {
         when(parameterPort.findCodeById(3)).thenReturn(Mono.just("EMPRESA"));
         when(parameterPort.findCodeById(13)).thenReturn(Mono.just("RUC"));
         when(parameterPort.findIdByGroupAndCode("DOCUMENT_STATUS", "ACTIVE")).thenReturn(Mono.just(7));
-        when(documentPort.findByTypeAndNumber(13, "20999")).thenReturn(Mono.empty());
+        when(documentPort.findByCustomerId(1)).thenReturn(Flux.empty());
+        when(documentPort.findByTypeAndNumber(13, "20131312955")).thenReturn(Mono.empty());
         when(documentPort.clearPrimaryFlag(1)).thenReturn(Mono.empty());
         CustomerDocument saved = doc(10);
         when(documentPort.save(any())).thenReturn(Mono.just(saved));
@@ -86,11 +89,44 @@ class CustomerDocumentServiceTest {
         when(parameterPort.existsByIdAndGroup(14, "DOCUMENT_TYPE")).thenReturn(Mono.just(true));
         when(parameterPort.findCodeById(3)).thenReturn(Mono.just("EMPRESA"));
         when(parameterPort.findCodeById(14)).thenReturn(Mono.just("DNI"));
+        when(documentPort.findByCustomerId(1)).thenReturn(Flux.empty()); // eager
         when(documentPort.findByTypeAndNumber(14, "12345678")).thenReturn(Mono.empty()); // eager
         when(parameterPort.findIdByGroupAndCode("DOCUMENT_STATUS", "ACTIVE")).thenReturn(Mono.just(7)); // eager
 
         CreateDocumentRequest dniReq = new CreateDocumentRequest(14, "12345678", null, true);
         StepVerifier.create(service.create(1, dniReq))
+                .expectError(BusinessRuleException.class)
+                .verify();
+    }
+
+    @Test
+    void create_segundoRuc_lanzaDuplicateType() {
+        // El cliente ya tiene un RUC (tipo 13) y se intenta agregar otro -> rechazar.
+        when(customerPort.findById(1)).thenReturn(Mono.just(customer()));
+        when(parameterPort.existsByIdAndGroup(13, "DOCUMENT_TYPE")).thenReturn(Mono.just(true));
+        when(parameterPort.findCodeById(3)).thenReturn(Mono.just("EMPRESA"));
+        when(parameterPort.findCodeById(13)).thenReturn(Mono.just("RUC"));
+        when(documentPort.findByCustomerId(1)).thenReturn(Flux.just(doc(99))); // ya tiene un RUC
+        when(documentPort.findByTypeAndNumber(13, "20131312955")).thenReturn(Mono.empty()); // eager
+        when(parameterPort.findIdByGroupAndCode("DOCUMENT_STATUS", "ACTIVE")).thenReturn(Mono.just(7)); // eager
+
+        StepVerifier.create(service.create(1, request()))
+                .expectError(BusinessRuleException.class)
+                .verify();
+    }
+
+    @Test
+    void create_rucConFormatoInvalido_lanzaError() {
+        // "123" no es un RUC válido (ni 11 dígitos ni dígito verificador).
+        when(customerPort.findById(1)).thenReturn(Mono.just(customer()));
+        when(parameterPort.existsByIdAndGroup(13, "DOCUMENT_TYPE")).thenReturn(Mono.just(true));
+        when(parameterPort.findCodeById(13)).thenReturn(Mono.just("RUC"));
+        when(documentPort.findByCustomerId(1)).thenReturn(Flux.empty()); // eager
+        when(documentPort.findByTypeAndNumber(13, "123")).thenReturn(Mono.empty()); // eager
+        when(parameterPort.findIdByGroupAndCode("DOCUMENT_STATUS", "ACTIVE")).thenReturn(Mono.just(7)); // eager
+
+        CreateDocumentRequest badRuc = new CreateDocumentRequest(13, "123", null, true);
+        StepVerifier.create(service.create(1, badRuc))
                 .expectError(BusinessRuleException.class)
                 .verify();
     }

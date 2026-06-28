@@ -107,7 +107,8 @@ CREATE TABLE IF NOT EXISTS customer_documents (
     CONSTRAINT fk_customer_documents_customer FOREIGN KEY (customer_id)        REFERENCES customers(customer_id),
     CONSTRAINT fk_customer_documents_type     FOREIGN KEY (document_type_id)   REFERENCES customer_parameters(parameter_id),
     CONSTRAINT fk_customer_documents_status   FOREIGN KEY (document_status_id) REFERENCES customer_parameters(parameter_id),
-    CONSTRAINT uq_customer_documents_number   UNIQUE (document_type_id, document_number)  -- evita RUC/DNI duplicado
+    CONSTRAINT uq_customer_documents_number   UNIQUE (document_type_id, document_number),     -- mismo número no se repite entre clientes
+    CONSTRAINT uq_customer_documents_customer_type UNIQUE (customer_id, document_type_id)     -- un solo documento por tipo por cliente (ej. un solo RUC)
 );
 
 -- ------------------------------------------------------------

@@ -53,7 +53,7 @@ public class CustomerAddressService implements CustomerAddressUseCase {
     @Override
     @Transactional
     public Mono<CustomerAddress> create(Integer customerId, CreateAddressRequest request) {
-        return ensureCustomerExists(customerId)
+        return ensureCustomerActive(customerId)
                 .then(validateAddressType(request.addressTypeId()))
                 .then(resolveStatusId(STATUS_ACTIVE))
                 .flatMap(statusId -> currentActorId().flatMap(actor -> {
@@ -193,6 +193,16 @@ public class CustomerAddressService implements CustomerAddressUseCase {
         return customerRepositoryPort.findById(customerId)
                 .switchIfEmpty(Mono.error(new ResourceNotFoundException("No se encontró el cliente con id: " + customerId)))
                 .then();
+    }
+
+    /** Para agregar registros el cliente debe existir Y estar activo. */
+    private Mono<Void> ensureCustomerActive(Integer customerId) {
+        return customerRepositoryPort.findById(customerId)
+                .switchIfEmpty(Mono.error(new ResourceNotFoundException("No se encontró el cliente con id: " + customerId)))
+                .flatMap(customer -> "ACTIVO".equals(customer.customerStatusName())
+                        ? Mono.<Void>empty()
+                        : Mono.<Void>error(new BusinessRuleException(
+                        "CUSTOMER_INACTIVE", "No se pueden agregar registros a un cliente inactivo.")));
     }
 
     private Mono<CustomerAddress> findAddressOfCustomer(Integer customerId, Integer addressId) {
