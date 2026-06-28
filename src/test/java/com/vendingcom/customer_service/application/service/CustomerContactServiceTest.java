@@ -5,6 +5,7 @@ import com.vendingcom.customer_service.application.port.output.persistence.Custo
 import com.vendingcom.customer_service.application.port.output.persistence.CustomerContactRepositoryPort;
 import com.vendingcom.customer_service.application.port.output.persistence.CustomerParameterRepositoryPort;
 import com.vendingcom.customer_service.application.port.output.persistence.CustomerRepositoryPort;
+import com.vendingcom.customer_service.domain.exception.BusinessRuleException;
 import com.vendingcom.customer_service.domain.exception.ResourceNotFoundException;
 import com.vendingcom.customer_service.domain.model.Customer;
 import com.vendingcom.customer_service.domain.model.CustomerContact;
@@ -78,6 +79,19 @@ class CustomerContactServiceTest {
         StepVerifier.create(service.deactivate(1, 5)).verifyComplete();
 
         assertEquals(Boolean.FALSE, captor.getValue().isPrimary());
+    }
+
+    @Test
+    void create_clienteInactivo_lanzaError() {
+        // No se puede agregar un contacto a un cliente inactivo.
+        Customer inactive = new Customer(1, "X", null, 3, null, null, null, 2, null, null,
+                LocalDateTime.now(), null, "EMPRESA", "INACTIVO");
+        when(customerPort.findById(1)).thenReturn(Mono.just(inactive));
+        when(parameterPort.findIdByGroupAndCode("CONTACT_STATUS", "ACTIVE")).thenReturn(Mono.just(6)); // eager
+
+        StepVerifier.create(service.create(1, request()))
+                .expectError(BusinessRuleException.class)
+                .verify();
     }
 
     @Test

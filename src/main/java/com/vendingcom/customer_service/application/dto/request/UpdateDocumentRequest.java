@@ -2,6 +2,7 @@ package com.vendingcom.customer_service.application.dto.request;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 public record UpdateDocumentRequest(
@@ -13,6 +14,7 @@ public record UpdateDocumentRequest(
         @Size(max = 50, message = "El número de documento no debe superar 50 caracteres")
         String documentNumber,
 
+        @Pattern(regexp = "^$|^https?://\\S+$", message = "La URL del archivo debe empezar con http:// o https://.")
         @Size(max = 255, message = "La URL del archivo no debe superar 255 caracteres")
         String fileUrl,
 
